@@ -66,6 +66,12 @@ type
     procedure onConsentFormLoadFailure(formError: JFormError); cdecl;
   end;
 
+  TInitializationCompleteListener = class(TAdMobListener, JOnInitializationCompleteListener)
+  public
+    { JOnInitializationCompleteListener }
+    procedure onInitializationComplete(initializationStatus: JInitializationStatus); cdecl;
+  end;
+
   TPlatformAdMob = class(TAdMob)
   private
     FConsentFormDismissedListener: JConsentForm_OnConsentFormDismissedListener;
@@ -73,6 +79,7 @@ type
     FConsentFormLoadSuccessListener: JUserMessagingPlatform_OnConsentFormLoadSuccessListener;
     FConsentInfoUpdateFailureListener: JConsentInformation_OnConsentInfoUpdateFailureListener;
     FConsentInfoUpdateSuccessListener: JConsentInformation_OnConsentInfoUpdateSuccessListener;
+    FInitializationCompleteListener: JOnInitializationCompleteListener;
     function ConsentInformation: JConsentInformation;
     procedure CreateListeners;
     function GetDebugGeography: Integer;
@@ -84,6 +91,7 @@ type
     procedure ConsentFormLoad(const AForm: JConsentForm; const AFormError: JFormError);
     procedure ConsentInfoUpdate(const AFormError: JFormError);
     procedure DoRequestConsent; override;
+    procedure InitializationComplete(const AStatus: JInitializationStatus);
   public
     function CanRequestAds: Boolean; override;
     function ConsentStatus: TConsentStatus; override;
@@ -131,6 +139,13 @@ end;
 procedure TConsentFormLoadFailureListener.onConsentFormLoadFailure(formError: JFormError);
 begin
   AndroidAdMob.ConsentFormLoad(nil, formError);
+end;
+
+{ TInitializationCompleteListener }
+
+procedure TInitializationCompleteListener.onInitializationComplete(initializationStatus: JInitializationStatus);
+begin
+  AndroidAdMob.InitializationComplete(initializationStatus);
 end;
 
 { TPlatformAdMob }
@@ -258,7 +273,6 @@ begin
     LConfigurationBuilder := TJRequestConfiguration_Builder.JavaClass.init;
     if not TestDeviceHashedId.IsEmpty then
       LConfigurationBuilder.setTestDeviceIds(StringArrayToJList([TestDeviceHashedId]));
-    TOSLog.d('+LConfigurationBuilder.setAgeRestrictedTreatment');
     case AgeRestrictedTreatment of
       TAgeRestrictedTreatment.Unspecified:
         LConfigurationBuilder.setAgeRestrictedTreatment(TJAgeRestrictedTreatment.JavaClass.UNSPECIFIED);
@@ -267,17 +281,21 @@ begin
       TAgeRestrictedTreatment.Teen:
         LConfigurationBuilder.setAgeRestrictedTreatment(TJAgeRestrictedTreatment.JavaClass.TEEN);
     end;
-    TOSLog.d('-LConfigurationBuilder.setAgeRestrictedTreatment');
     TJMobileAds.JavaClass.setRequestConfiguration(LConfigurationBuilder.build);
-    TOSLog.d('-TJMobileAds.JavaClass.setRequestConfiguration');
-    TJMobileAds.JavaClass.initialize(TAndroidHelper.Context);
-    AdsStarted;
+    if FInitializationCompleteListener = nil then
+      FInitializationCompleteListener := TInitializationCompleteListener.Create(Self);
+    TJMobileAds.JavaClass.initialize(TAndroidHelper.Context, FInitializationCompleteListener);
   end;
 end;
 
 procedure TPlatformAdMob.HandleError(const AOrigin: string; const AFormError: JFormError);
 begin
   ConsentError(TConsentError.Create(AFormError.getErrorCode, JStringToString(AFormError.getMessage), AOrigin));
+end;
+
+procedure TPlatformAdMob.InitializationComplete(const AStatus: JInitializationStatus);
+begin
+  AdsStarted;
 end;
 
 procedure TPlatformAdMob.ConsentFormDismissed(const AFormError: JFormError);
