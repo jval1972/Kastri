@@ -33,6 +33,7 @@ type
   TAdError = record
     ErrorCode: Integer;
     Message: string;
+    ExtraInfo: string;
   end;
 
   TAdErrorEvent = procedure(Sender: TObject; const Error: TAdError) of object;

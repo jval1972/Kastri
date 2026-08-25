@@ -17,8 +17,7 @@ uses
   // RTL
   System.Classes, System.SysUtils,
   // Android
-  Androidapi.JNIBridge, Androidapi.JNI.JavaTypes, Androidapi.JNI.AdMob, Androidapi.JNI.GraphicsContentViewText,
-  Androidapi.JNI.Os, Androidapi.JNI.App,
+  Androidapi.JNIBridge, Androidapi.JNI.JavaTypes, Androidapi.JNI.GraphicsContentViewText, Androidapi.JNI.Os, Androidapi.JNI.App,
   // DW
   DW.Androidapi.JNI.AdMob, DW.AdMob, DW.AdMobAds;
 
@@ -51,7 +50,7 @@ type
   JDWInterstitialAdCallbackDelegate = interface(IJavaInstance)
     ['{11DEBF75-98FA-42B8-B9DE-5661D0CEC5AF}']
     procedure onAdFailedToLoad(loadAdError: JLoadAdError); cdecl;
-    procedure onAdLoaded(interstitialAd: JInterstitial_InterstitialAd); cdecl;
+    procedure onAdLoaded(interstitialAd: JInterstitialAd); cdecl;
     procedure onAdDismissedFullScreenContent; cdecl;
     procedure onAdFailedToShowFullScreenContent(adError: JAdError); cdecl;
     procedure onAdShowedFullScreenContent; cdecl;
@@ -149,7 +148,7 @@ type
   public
     { JDWInterstitialAdCallbackDelegate }
     procedure onAdFailedToLoad(loadAdError: JLoadAdError); cdecl;
-    procedure onAdLoaded(interstitialAd: JInterstitial_InterstitialAd); cdecl;
+    procedure onAdLoaded(interstitialAd: JInterstitialAd); cdecl;
     procedure onAdDismissedFullScreenContent; cdecl;
     procedure onAdFailedToShowFullScreenContent(adError: JAdError); cdecl;
     procedure onAdShowedFullScreenContent; cdecl;
@@ -159,10 +158,10 @@ type
 
   TPlatformInterstitialAd = class(TCustomPlatformInterstitialAd)
   private
-    FAd: Jinterstitial_InterstitialAd;
+    FAd: JInterstitialAd;
     FCallbackDelegate: TInterstitialAdCallbackDelegate;
   protected
-    procedure AdLoaded(const AInterstitialAd: JInterstitial_InterstitialAd);
+    procedure AdLoaded(const AInterstitialAd: JInterstitialAd);
     procedure DoAdDismissedFullScreenContent; override;
     procedure DoAdFailedToShowFullScreenContent(const AError: TAdError); override;
     procedure DoAdWillPresentFullScreenContent; override;
@@ -303,10 +302,26 @@ uses
   // Android
   Androidapi.Helpers;
 
-function GetAdError(const adError: JAdError): TAdError;
+type
+  TAdErrorHelper = record helper for TAdError
+    constructor Create(const AAdError: JAdError); overload;
+    constructor Create(const ALoadAdError: JLoadAdError); overload;
+  end;
+
+{ TAdErrorHelper }
+
+constructor TAdErrorHelper.Create(const AAdError: JAdError);
 begin
-  Result.ErrorCode := adError.getCode;
-  Result.Message := JStringToString(adError.getMessage);
+  ErrorCode := AAdError.getCode;
+  Message := JStringToString(AAdError.getMessage);
+end;
+
+constructor TAdErrorHelper.Create(const ALoadAdError: JLoadAdError);
+begin
+  ErrorCode := ALoadAdError.getCode;
+  Message := JStringToString(ALoadAdError.getMessage);
+  if ALoadAdError.getResponseInfo <> nil then
+    ExtraInfo := JStringToString(ALoadAdError.getResponseInfo.toString);
 end;
 
 { TInterstitialAdCallbackDelegate }
@@ -325,15 +340,15 @@ end;
 
 procedure TInterstitialAdCallbackDelegate.onAdFailedToLoad(loadAdError: JLoadAdError);
 begin
-  FPlatformInterstitialAd.DoAdFailedToLoad(GetAdError(loadAdError));
+  FPlatformInterstitialAd.DoAdFailedToLoad(TAdError.Create(loadAdError));
 end;
 
 procedure TInterstitialAdCallbackDelegate.onAdFailedToShowFullScreenContent(adError: JAdError);
 begin
-  FPlatformInterstitialAd.DoAdFailedToShowFullScreenContent(GetAdError(adError));
+  FPlatformInterstitialAd.DoAdFailedToShowFullScreenContent(TAdError.Create(adError));
 end;
 
-procedure TInterstitialAdCallbackDelegate.onAdLoaded(interstitialAd: JInterstitial_InterstitialAd);
+procedure TInterstitialAdCallbackDelegate.onAdLoaded(interstitialAd: JInterstitialAd);
 begin
   FPlatformInterstitialAd.AdLoaded(interstitialAd);
 end;
@@ -368,7 +383,7 @@ begin
   inherited;
 end;
 
-procedure TPlatformInterstitialAd.AdLoaded(const AInterstitialAd: JInterstitial_InterstitialAd);
+procedure TPlatformInterstitialAd.AdLoaded(const AInterstitialAd: JInterstitialAd);
 begin
   FAd := AInterstitialAd;
   DoAdLoaded;
@@ -386,9 +401,9 @@ var
 begin
   if FAd = nil then
   begin
-    LRequest := TJAdRequest_Builder.JavaClass.init.build;
     LAdUnitId := StringToJString(AdUnitID);
-    TJinterstitial_InterstitialAd.JavaClass.load(TAndroidHelper.Context, LAdUnitId, LRequest, FCallbackDelegate.Callback);
+    LRequest := TJAdRequest_Builder.JavaClass.init.build;
+    TJInterstitialAd.JavaClass.load(TAndroidHelper.Activity, LAdUnitId, LRequest, FCallbackDelegate.Callback);
   end;
   // else ad already showing
 end;
@@ -432,12 +447,12 @@ end;
 
 procedure TRewardedAdLoadCallbackDelegate.onAdFailedToLoad(loadAdError: JLoadAdError);
 begin
-  FPlatformRewardedAd.DoAdFailedToLoad(GetAdError(loadAdError));
+  FPlatformRewardedAd.DoAdFailedToLoad(TAdError.Create(loadAdError));
 end;
 
 procedure TRewardedAdLoadCallbackDelegate.onAdFailedToShowFullScreenContent(adError: JAdError);
 begin
-  FPlatformRewardedAd.DoAdFailedToShowFullScreenContent(GetAdError(adError));
+  FPlatformRewardedAd.DoAdFailedToShowFullScreenContent(TAdError.Create(adError));
 end;
 
 procedure TRewardedAdLoadCallbackDelegate.onAdLoaded(rewardedAd: JRewardedAd);
@@ -537,7 +552,7 @@ end;
 
 procedure TRewardedInterstitialAdLoadCallbackDelegate.onAdFailedToShowFullScreenContent(adError: JAdError);
 begin
-  FPlatformRewardedInterstitialAd.DoAdFailedToShowFullScreenContent(GetAdError(adError));
+  FPlatformRewardedInterstitialAd.DoAdFailedToShowFullScreenContent(TAdError.Create(adError));
 end;
 
 procedure TRewardedInterstitialAdLoadCallbackDelegate.onAdLoaded(rewardedInterstitialAd: JRewardedInterstitialAd);
@@ -631,12 +646,12 @@ end;
 
 procedure TAppOpenAdLoadCallbackDelegate.onAdFailedToLoad(loadAdError: JLoadAdError);
 begin
-  FAppOpenAd.DoAdFailedToLoad(GetAdError(loadAdError));
+  FAppOpenAd.DoAdFailedToLoad(TAdError.Create(loadAdError));
 end;
 
 procedure TAppOpenAdLoadCallbackDelegate.onAdFailedToShowFullScreenContent(adError: JAdError);
 begin
-  FAppOpenAd.DoAdFailedToShowFullScreenContent(GetAdError(adError));
+  FAppOpenAd.DoAdFailedToShowFullScreenContent(TAdError.Create(adError));
 end;
 
 procedure TAppOpenAdLoadCallbackDelegate.onAdLoaded(ad: JAppOpenAd);
