@@ -6,6 +6,7 @@ interface
 
 const
   CRLF = #13#10;
+  cJavaScriptNullResult = 'null';
 
 type
   TAuthorizationStatus = (NotDetermined, Restricted, Denied, Authorized, Limited);
@@ -39,6 +40,8 @@ type
     function Text(const ASeparator: string = CRLF): string;
     function Values: TArray<string>;
   end;
+
+  TJavaScriptResultProc = reference to procedure(const JavaScriptResult: string; const ErrorCode: Integer);
 
 implementation
 
