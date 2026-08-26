@@ -18,9 +18,9 @@ uses
   System.Classes, System.SysUtils, System.TypInfo,
   // Android
   Androidapi.JNI.JavaTypes, Androidapi.JNI.Net, Androidapi.JNI.GraphicsContentViewText, Androidapi.JNI.Os, Androidapi.JNI.App, Androidapi.JNI.Media,
-  Androidapi.JNIBridge,
+  Androidapi.JNIBridge, Androidapi.JNI.Webkit,
   // DW
-  DW.Androidapi.JNI.App, DW.Androidapi.JNI.Os, DW.Androidapi.JNI.JavaTypes, DW.Androidapi.JNI.DWUtility;
+  DW.Androidapi.JNI.App, DW.Androidapi.JNI.Os, DW.Androidapi.JNI.JavaTypes, DW.Androidapi.JNI.DWUtility, DW.Types;
 
 type
   TUncaughtExceptionHandler = class(TJavaLocal, JThread_UncaughtExceptionHandler)
@@ -365,6 +365,25 @@ type
     procedure Parse(const ABundle: JBundle);
     procedure ToStrings(const AStrings: TStrings);
     function ToStringArray: TArray<string>;
+  end;
+
+  TNativeValueCallbacks = TArray<JValueCallback>;
+
+  TNativeValueCallbacksHelper = record helper for TNativeValueCallbacks
+    procedure Add(const ANativeValueCallback: JValueCallback);
+    procedure Remove(const ANativeValueCallback: JValueCallback);
+  end;
+
+  TValueCallback = class(TJavaLocal, JValueCallback)
+  private
+    class var FNativeValueCallbacks: TNativeValueCallbacks;
+  private
+    FHandler: TJavaScriptResultProc;
+  public
+    { JValueCallback }
+    procedure onReceiveValue(value: JObject); cdecl;
+  public
+    constructor Create(const AHandler: TJavaScriptResultProc);
   end;
 
 implementation
@@ -1318,6 +1337,44 @@ begin
   AStrings.Clear;
   for LPair in Pairs do
     AStrings.Values[LPair.KeyAsString] := LPair.ValueAsString;
+end;
+
+{ TNativeValueCallbacksHelper }
+
+procedure TNativeValueCallbacksHelper.Add(const ANativeValueCallback: JValueCallback);
+begin
+  Self := Self + [ANativeValueCallback];
+end;
+
+procedure TNativeValueCallbacksHelper.Remove(const ANativeValueCallback: JValueCallback);
+var
+  I: Integer;
+begin
+  for I := 0 to High(Self) do
+  begin
+    if Self[I] = ANativeValueCallback then
+    begin
+      Self[I] := nil;
+      Delete(Self, I, 1);
+      Break;
+    end;
+  end;
+end;
+
+{ TValueCallback }
+
+constructor TValueCallback.Create(const AHandler: TJavaScriptResultProc);
+begin
+  inherited Create;
+  FHandler := AHandler;
+  FNativeValueCallbacks.Add(Self);
+end;
+
+procedure TValueCallback.onReceiveValue(value: JObject);
+begin
+  if Assigned(FHandler) then
+    FHandler(JStringToString(TJString.Wrap(value)).DeQuotedString('"'), 0);
+  FNativeValueCallbacks.Remove(Self);
 end;
 
 end.
